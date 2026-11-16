@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pengelola KEY</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#172033;background:#f3f5f9}
+*{box-sizing:border-box}body{margin:0;padding:22px 14px}.wrap{max-width:760px;margin:auto}
+header{margin:8px 0 20px}h1{font-size:27px;margin:0 0 5px}.muted{color:#64748b;font-size:14px}
+.card{background:white;border:1px solid #e2e8f0;border-radius:15px;padding:17px;margin:14px 0;box-shadow:0 3px 12px #0f172a08}
+h2{font-size:18px;margin:0 0 14px}label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}
+input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}
+button{border:0;border-radius:9px;padding:10px 13px;font:inherit;font-weight:650;cursor:pointer}
+.primary{background:#2457d6;color:white}.secondary{background:#e9eef8;color:#1e293b}.danger{background:#fee2e2;color:#991b1b}.small{padding:7px 10px;font-size:13px}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.row>*{flex:1}
+.notice{background:#fff7df;border:1px solid #f5d98b;padding:12px;border-radius:10px;color:#704d00;font-size:13px;line-height:1.5}
+#status{margin-top:10px;font-size:14px}.item{border:1px solid #e2e8f0;border-radius:11px;padding:13px;margin:10px 0}
+.key{font-weight:750;overflow-wrap:anywhere}.meta{font-size:13px;color:#64748b;margin:5px 0 10px}
+.pill{display:inline-block;padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;margin-left:6px}
+.active{background:#dcfce7;color:#166534}.off{background:#e2e8f0;color:#475569}.expired{background:#fee2e2;color:#991b1b}
+.empty{color:#64748b;text-align:center;padding:20px}
+@media(min-width:600px){body{padding-top:35px}}
+</style>
+</head>
+<body><main class="wrap">
+<header><h1>Pengelola KEY</h1><div class="muted">Tambah KEY, atur status, dan cek masa aktif.</div></header>
+<div class="notice"><b>Catatan:</b> Versi ini menyimpan data hanya di browser/perangkat yang sedang digunakan. Tanpa server dan login, perubahan tidak dibagikan ke perangkat lain dan tidak bisa dipakai sebagai verifikasi KEY yang aman untuk APK.</div>
+<section class="card">
+<h2>Tambah / Muat KEY</h2>
+<label for="keyInput">Nama atau kode KEY</label><input id="keyInput" placeholder="Contoh: DEMO-ABCD-1234">
+<label for="expiryInput">Berlaku sampai (opsional)</label><input id="expiryInput" type="date">
+<div class="row" style="margin-top:13px"><button class="primary" id="addBtn">Simpan KEY</button><button class="secondary" id="generateBtn" type="button">Buat KEY acak</button></div>
+<div id="status" aria-live="polite"></div>
+</section>
+<section class="card">
+<h2>Cek masa aktif KEY</h2>
+<label for="checkInput">Masukkan KEY</label><input id="checkInput" placeholder="Ketik KEY yang ingin diperiksa">
+<button class="secondary" id="checkBtn" style="margin-top:12px">Cek KEY</button>
+<div id="checkResult" aria-live="polite"></div>
+</section>
+<section class="card">
+<div class="row"><h2 style="margin:0">Daftar KEY</h2><button class="secondary small" id="refreshBtn">Perbarui</button></div>
+<div id="keyList"></div>
+</section>
+</main>
+<script>
+const STORE='pengelola_key_local_v1';
+const $=id=>document.getElementById(id);
+let keys=load();
+function load(){try{return JSON.parse(localStorage.getItem(STORE)||'[]')}catch{return []}}
+function save(){localStorage.setItem(STORE,JSON.stringify(keys));render()}
+function norm(s){return s.trim().toUpperCase()}
+function state(k){if(!k.enabled)return ['Nonaktif','off'];if(k.expiry && k.expiry < new Date().toISOString().slice(0,10))return ['Kedaluwarsa','expired'];return ['Aktif','active']}
+function add(){
+ const key=norm($('keyInput').value), expiry=$('expiryInput').value;
+ if(!key){$('status').textContent='Masukkan kode KEY terlebih dahulu.';return}
+ if(keys.some(x=>x.key===key)){$('status').textContent='KEY tersebut sudah ada.';return}
+ keys.unshift({key,expiry,enabled:true,created:new Date().toISOString()});
+ save();$('keyInput').value='';$('expiryInput').value='';$('status').textContent='KEY berhasil disimpan di browser ini.'
+}
+function generate(){const part=()=>Math.random().toString(36).slice(2,6).toUpperCase();$('keyInput').value='KEY-'+part()+'-'+part()+'-'+part()}
+function render(){
+ const box=$('keyList');box.innerHTML='';
+ if(!keys.length){box.innerHTML='<div class="empty">Belum ada KEY. Tambahkan KEY di atas.</div>';return}
+ keys.forEach((k,i)=>{
+  const [label,cls]=state(k),div=document.createElement('div');div.className='item';
+  const top=document.createElement('div');top.className='key';top.textContent=k.key;
+  const pill=document.createElement('span');pill.className='pill '+cls;pillFix(pill,label);top.appendChild(pill);
+  const meta=document.createElement('div');meta.className='meta';meta.textContent='Berlaku sampai: '+(k.expiry||'Tanpa batas tanggal');
+  const actions=document.createElement('div');actions.className='row';
+  const toggle=document.createElement('button');toggle.className='secondary small';toggle.textContent=k.enabled?'Nonaktifkan':'Aktifkan';
+  toggle.onclick=()=>{keys[i].enabled=!keys[i].enabled;save()};
+  const del=document.createElement('button');del.className='danger small';del.textContent='Hapus';del.onclick=()=>{if(confirm('Hapus KEY '+k.key+'?')){keys.splice(i,1);save()}};
+  actions.append(toggle,del);div.append(top,meta,actions);box.appendChild(div);
+ });
+}
+function pillFix(el,label){el.textContent=label}
+function check(){
+ const value=norm($('checkInput').value),found=keys.find(k=>k.key===value),out=$('checkResult');
+ out.style.marginTop='12px';
+ if(!value){out.textContent='Masukkan KEY untuk diperiksa.';return}
+ if(!found){out.textContent='KEY tidak ditemukan di daftar browser ini.';return}
+ const [label]=state(found);out.textContent='Status: '+label+'. Masa aktif sampai: '+(found.expiry||'tanpa batas tanggal')+'.'
+}
+$('addBtn').onclick=add;$('generateBtn').onclick=generate;$('checkBtn').onclick=check;$('refreshBtn').onclick=render;
+render();
+</script></body></html>
